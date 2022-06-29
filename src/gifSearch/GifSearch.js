@@ -10,9 +10,9 @@ export function GifSearch() {
     const [isLoading, setIsLoading] = useState(false)
     const [isError, setIsError] = useState(false)
     const [pagination, setPagination] = useState({
-        count: 25,
+        count: 0,
         offset: 0,
-        totalCount: 100
+        totalCount: 0
     });
     const lastElement = useRef(null);
     const [gifIndex, setGifIndex] = useState(-1);
@@ -20,6 +20,7 @@ export function GifSearch() {
     const handleObserver = (entries) => {
         const target = entries[0];
         if (target.isIntersecting) {
+            console.log("api call")
             if (!isLoading) {
                 submitGifSearch(searchText);
             }
@@ -30,7 +31,7 @@ export function GifSearch() {
         const option = {
             root: null,
             rootMargin: "0px",
-            threshold: 1
+            threshold: 0.8
         };
         const observer = new IntersectionObserver(handleObserver, option);
         if (lastElement.current) {
@@ -40,7 +41,7 @@ export function GifSearch() {
     }, [handleObserver]);
 
 
-    // Set Recent Suggestions
+    // Set Recent Suggestions from local storage
     useEffect(() => {
         let searchTextString = localStorage.getItem('gifSearchText');
         let searchTextList = JSON.parse(searchTextString);
@@ -56,9 +57,11 @@ export function GifSearch() {
         let recentSuggestionsUpdatedSet = new Set(recentSuggestionsUpdated);
 
         setRecentSuggestions(Array.from(recentSuggestionsUpdatedSet));
-        localStorage.setItem('gifSearchText', JSON.stringify(recentSuggestions));
+        localStorage.setItem('gifSearchText', JSON.stringify(recentSuggestionsUpdatedSet));
+
         setIsLoading(true);
-        const response = await getAllGifs(searchValue);
+        let newOffset = pagination.offset + pagination.count;
+        const response = await getAllGifs(searchValue, newOffset, 25);
         if (response.meta.msg.toUpperCase() === "OK") {
             setGifs(response.data)
             setPagination({
@@ -85,6 +88,8 @@ export function GifSearch() {
                 hideSelectedOptions={false}
                 value={{ label: searchText, value: searchText }}
                 onChange={(inputValue, actionMeta) => {
+                    if(!inputValue) return;
+
                     setSearchText(inputValue.value)
                     submitGifSearch(inputValue.value);
                 }}
@@ -114,6 +119,6 @@ export function GifSearch() {
                     }} />
             })}
         </div>}
-        {!isLoading && !isError && <div style={{ height: "200px", width: "100%", color: "blue" }} ref={lastElement}></div>}
+        {!isLoading && !isError && <div style={{ height: "300px", width: "100%", backgroundColor: "#eee", marginBottom:"5px" }} ></div>}
     </>
 }
