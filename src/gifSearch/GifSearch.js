@@ -1,7 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { getAllGifs } from './gifSearch.service';
 import './gifSearch.css';
 import Creatable from 'react-select/creatable';
+import InfiniteScroll from 'react-infinite-scroller';
 
 export function GifSearch() {
     const [gifs, setGifs] = useState([]);
@@ -9,37 +10,12 @@ export function GifSearch() {
     const [searchText, setSearchText] = useState('');
     const [isLoading, setIsLoading] = useState(false)
     const [isError, setIsError] = useState(false)
+    const [gifIndex, setGifIndex] = useState(-1);
     const [pagination, setPagination] = useState({
         count: 0,
         offset: 0,
         totalCount: 0
     });
-    const lastElement = useRef(null);
-    const [gifIndex, setGifIndex] = useState(-1);
-
-    const handleObserver = (entries) => {
-        const target = entries[0];
-        if (target.isIntersecting) {
-            console.log("api call")
-            if (!isLoading) {
-                submitGifSearch(searchText);
-            }
-        }
-    };
-
-    useEffect(() => {
-        const option = {
-            root: null,
-            rootMargin: "0px",
-            threshold: 0.8
-        };
-        const observer = new IntersectionObserver(handleObserver, option);
-        if (lastElement.current) {
-            observer.observe(lastElement.current);
-            //observer.disconnect()
-        }
-    }, [handleObserver]);
-
 
     // Set Recent Suggestions from local storage
     useEffect(() => {
@@ -57,13 +33,15 @@ export function GifSearch() {
         let recentSuggestionsUpdatedSet = new Set(recentSuggestionsUpdated);
 
         setRecentSuggestions(Array.from(recentSuggestionsUpdatedSet));
-        localStorage.setItem('gifSearchText', JSON.stringify(recentSuggestionsUpdatedSet));
+        console.log(recentSuggestionsUpdatedSet);
+        localStorage.setItem('gifSearchText', JSON.stringify(Array.from(recentSuggestionsUpdatedSet)));
 
         setIsLoading(true);
         let newOffset = pagination.offset + pagination.count;
         const response = await getAllGifs(searchValue, newOffset, 25);
         if (response.meta.msg.toUpperCase() === "OK") {
-            setGifs(response.data)
+            let allGifs = [...gifs, ...response.data]
+            setGifs(allGifs)
             setPagination({
                 count: response.pagination.count,
                 offset: response.pagination.offset,
@@ -88,10 +66,12 @@ export function GifSearch() {
                 hideSelectedOptions={false}
                 value={{ label: searchText, value: searchText }}
                 onChange={(inputValue, actionMeta) => {
-                    if(!inputValue) return;
+                    if (!inputValue) return;
+
+                    const isNewSearch = searchText === inputValue.value
 
                     setSearchText(inputValue.value)
-                    submitGifSearch(inputValue.value);
+                    submitGifSearch(inputValue.value, isNewSearch);
                 }}
                 components={{
                     DropdownIndicator: null,
@@ -101,24 +81,30 @@ export function GifSearch() {
             />
         </div>
 
-        {isLoading && <div>Loading ...</div>}
-        {isError && <div>Error!!!</div>}
-        {!isLoading && !isError && <div className='grid-gif'>
-            {gifs?.map((gif, index) => {
-                let isActive = index === gifIndex;
+        <InfiniteScroll
+            pageStart={0}
+            loadMore={() => { if (!isLoading) submitGifSearch(searchText) }}
+            hasMore={!isLoading ? (pagination.totalCount > pagination.count + pagination.offset) : false}
+            loader={<h4>Loading...</h4>}
+            threshold={100}
+        >
 
-                return <img key={gif.id + index} src={getSourceUrl(gif, index)}
-                    style={{ cursor: isActive ? "pointer" : "auto" }}
-                    onClick={(e) => {
-                        if (gifIndex > 0) {
-                            setGifIndex(-1);
-                        }
-                        else {
-                            setGifIndex(index);
-                        }
-                    }} />
-            })}
-        </div>}
-        {!isLoading && !isError && <div style={{ height: "300px", width: "100%", backgroundColor: "#eee", marginBottom:"5px" }} ></div>}
+            {!isLoading && !isError && <div className='grid-gif'>
+                {gifs?.map((gif, index) => {
+                    let isActiveGif = index === gifIndex;
+                    let isAnyGifActive = gifIndex >= 0;
+                    return <img key={gif.id + index} src={getSourceUrl(gif, index)}
+                        style={{ cursor: isAnyGifActive ? isActiveGif ? "pointer" : "auto" : "pointer" }}
+                        onClick={(e) => {
+                            if (gifIndex > 0) {
+                                setGifIndex(-1);
+                            }
+                            else {
+                                setGifIndex(index);
+                            }
+                        }} />
+                })}
+            </div>}
+        </InfiniteScroll>
     </>
 }
